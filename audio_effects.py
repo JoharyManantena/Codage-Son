@@ -1,6 +1,6 @@
 class EffetsAudio:
     def __init__(self, echantillons):
-        self.echantillons = echantillons  # Stocker les échantillons dans l'instance
+        self.echantillons = echantillons
 
     def amplifier(self, facteur, profondeur_bits=16):
         """Amplifie les échantillons avec un facteur donné en évitant l'écrêtage"""

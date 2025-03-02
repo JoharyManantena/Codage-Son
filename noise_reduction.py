@@ -5,12 +5,15 @@ class ReductionBruit:
     def __init__(self, taux_echantillonnage):
         self.taux_echantillonnage = taux_echantillonnage
         self.profil_bruit = None
+        
 
     def creer_profil_bruit(self, echantillons, duree=0.5):
         """Capture le profil de bruit sur les premières X secondes"""
         nb_echantillons = int(duree * self.taux_echantillonnage)
         self.profil_bruit = echantillons[:nb_echantillons]
         return self.profil_bruit
+    
+    
 
     def _tfc(self, x, taille_fenetre=1024, pas=512):
         """Transformée de Fourier à Court Terme (manuellement)"""
@@ -20,6 +23,8 @@ class ReductionBruit:
             fenetree = [trame[n] * self._fenetre_hann(n, taille_fenetre) for n in range(taille_fenetre)]
             trames.append(self._tfd(fenetree))
         return trames
+    
+    
 
     def _tfc_inverse(self, trames, taille_fenetre=1024, pas=512):
         """Transformée inverse"""
@@ -30,6 +35,8 @@ class ReductionBruit:
             for n in range(taille_fenetre):
                 sortie[debut + n] += inverse[n].real * self._fenetre_hann(n, taille_fenetre)
         return self._normaliser(sortie)
+    
+    
 
     def _tfd(self, x):
         """Implémentation FFT récursive (Cooley-Tukey)"""
@@ -40,6 +47,8 @@ class ReductionBruit:
         T = [cmath.exp(-2j * cmath.pi * k / N) * impair[k] for k in range(N // 2)]
         return [pair[k] + T[k] for k in range(N // 2)] + [pair[k] - T[k] for k in range(N // 2)]
 
+
+
     def _tfd_inverse(self, x):
         """Inverse FFT"""
         N = len(x)
@@ -48,12 +57,15 @@ class ReductionBruit:
         # Application du conjugué et normalisation
         return [ (tfd_conjugue[k].conjugate() / N).real for k in range(N) ]
 
+
     def _fenetre_hann(self, n, taille_fenetre):
         return 0.5 * (1 - math.cos(2 * math.pi * n / (taille_fenetre - 1)))
+
 
     def _normaliser(self, x):
         max_val = max(abs(num) for num in x)
         return [int((num / max_val) * 32767) for num in x]
+
 
     def reduire_bruit(self, echantillons, taille_fenetre=1024, reduction_bruit=0.5):
         """Réduction de bruit par soustraction spectrale"""

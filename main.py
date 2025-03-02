@@ -6,13 +6,9 @@ def process_audio(input_file, output_file):
     wav = FichierWAV(input_file)
     wav.charger()
 
-    # Instancier EffetsAudio directement avec les samples originaux
     audio_fx = EffetsAudio(wav.echantillons)
-
-    # Déterminer le facteur d'amplification maximal sécurisé
     test_result = audio_fx.tester_amplification(1.0)
     
-    # Amplification avec le facteur calculé
     echantillons_final = audio_fx.amplifier(test_result['facteur_securise'])
 
     # Sauvegarde

@@ -1,12 +1,10 @@
-# create.py
-
 import wave
 import numpy as np
 
 # Paramètres de l'audio
 frequence_echantillonnage = 44100  # Fréquence d'échantillonnage (Hz)
-duree = 10  # Durée du son en secondes
-frequence = 650.0  # Fréquence du son (Hz, 440 Hz correspond à La)
+duree = 10 
+frequence = 650.0  
 
 # Création du signal sinusoidal
 temps = np.linspace(0, duree, int(frequence_echantillonnage * duree), endpoint=False)
