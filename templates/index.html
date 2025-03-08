@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Éditeur de Son</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='index.css') }}">
+</head>
+<body>
+<div class="audio-editor">
+  <div class="audio-editor-header">Éditeur de Son</div>
+  <div class="editor-sections">
+    <!-- Section Original -->
+    <div class="section-original">
+      <h2>ORIGINAL</h2>
+      <canvas id="originalWaveCanvas"></canvas>
+      <button id="playOriginalButton">Play Original</button>
+    </div>
+    <!-- Panneau central avec les sliders -->
+    <div class="panel-center">
+      <label for="amplifierRange">Amplifier</label>
+      <input type="range" id="amplifierRange" min="0" max="100" value="50">
+      
+      <label for="amplitudeMultiplier">Multiplicateur</label>
+      <select id="amplitudeMultiplier">
+        <option value="1">x1</option>
+        <option value="1.5">x1.5</option>
+        <option value="2">x2</option>
+        <option value="3">x3</option>
+      </select>
+
+      <label for="distortionRange">AntiDistorsion</label>
+      <input type="range" id="distortionRange" min="0" max="100" value="0">
+
+      <button id="antiBruitageButton">Anti-Bruitage</button>
+    </div>
+    <!-- Section Modifié -->
+    <div class="section-modified">
+      <h2>MODIFIÉ</h2>
+      <canvas id="modifiedWaveCanvas"></canvas>
+      <button id="playModifiedButton">Play Modified</button>
+    </div>
+  </div>
+  <!-- Barre de contrôles globale -->
+  <div class="editor-controls">
+    <div>
+      <button id="importButton">Importer Son</button>
+      <span class="info-label">Fichier: <span id="fileNameLabel">Aucun</span></span>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentFile = null;
+  let originalSamples = [];
+  let modifiedSamples = [];
+  let originalBuffer = null;
+  let modifiedBuffer = null;
+  let audioContext;
+  let sourceNode = null; // pour la lecture globale si nécessaire
+
+  // Configuration des canvas
+  const originalCanvas = document.getElementById("originalWaveCanvas");
+  const modifiedCanvas = document.getElementById("modifiedWaveCanvas");
+  const originalCtx = originalCanvas.getContext("2d");
+  const modifiedCtx = modifiedCanvas.getContext("2d");
+  const canvasWidth = originalCanvas.width = 500;
+  const canvasHeight = originalCanvas.height = 150;
+  modifiedCanvas.width = 500;
+  modifiedCanvas.height = 150;
+  
+  // Dessiner l'onde audio sur un canvas
+  function drawRealWave(ctx, samples, color = "blue") {
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    const step = Math.ceil(samples.length / canvasWidth);
+    const amp = canvasHeight / 2;
+    for (let x = 0; x < canvasWidth; x++) {
+      const idx = Math.floor(x * step);
+      const val = samples[idx] * amp * 0.8;
+      const y = amp + val;
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  
+  // Fonction d'upload et de traitement initial
+  async function loadAudio(file) {
+    currentFile = file; // conserver le fichier pour réutilisation
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("factor", 1.0);  // amplification par défaut = 1.0
+
+    try {
+      const response = await fetch("/upload", {
+        method: "POST",
+        body: formData
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const tempContext = new AudioContext();
+        const arrayBuffer = await blob.arrayBuffer();
+        const audioBuffer = await tempContext.decodeAudioData(arrayBuffer);
+        // Stocker le buffer dans originalBuffer et modifiedBuffer (initialement identiques)
+        originalBuffer = audioBuffer;
+        modifiedBuffer = audioBuffer;
+        originalSamples = audioBuffer.getChannelData(0);
+        modifiedSamples = originalSamples;
+        drawRealWave(originalCtx, originalSamples, "blue");
+        drawRealWave(modifiedCtx, modifiedSamples, "red");
+        document.getElementById("fileNameLabel").textContent = file.name;
+        // Affichage de la durée
+        document.getElementById("timeLabel").textContent = audioBuffer.duration.toFixed(2) + "s";
+        tempContext.close();
+      }
+    } catch (error) {
+      console.error("Erreur:", error);
+    }
+  }
+  
+  // Import du fichier via bouton
+  document.getElementById("importButton").addEventListener("click", () => {
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = ".wav";
+    fileInput.onchange = e => loadAudio(e.target.files[0]);
+    fileInput.click();
+  });
+  
+  // Traitement d'amplification lors du changement du slider
+  document.getElementById("amplifierRange").addEventListener("input", async () => {
+    if (!currentFile) {
+      console.warn("Aucun fichier chargé");
+      return;
+    }
+    // Conversion du slider en facteur : division par 50 puis application du multiplicateur
+    const baseFactor = parseFloat(document.getElementById("amplifierRange").value) / 50;
+    const multiplier = parseFloat(document.getElementById("amplitudeMultiplier").value);
+    const factor = baseFactor * multiplier;
+    
+    const formData = new FormData();
+    formData.append("file", currentFile);
+    formData.append("factor", factor);
+    
+    try {
+      const response = await fetch("/upload", {
+        method: "POST",
+        body: formData
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const tempContext = new AudioContext();
+        const arrayBuffer = await blob.arrayBuffer();
+        const audioBuffer = await tempContext.decodeAudioData(arrayBuffer);
+        modifiedBuffer = audioBuffer;
+        modifiedSamples = audioBuffer.getChannelData(0);
+        drawRealWave(modifiedCtx, modifiedSamples, "red");
+        document.getElementById("timeLabel").textContent = audioBuffer.duration.toFixed(2) + "s";
+        tempContext.close();
+      }
+    } catch (error) {
+      console.error("Erreur d'amplification:", error);
+    }
+  });
+  
+  // Bouton Play dans la section ORIGINAL
+  document.getElementById("playOriginalButton").addEventListener("click", () => {
+    if (!originalBuffer) {
+      console.warn("Aucun audio original chargé pour la lecture.");
+      return;
+    }
+    if (!audioContext) {
+      audioContext = new AudioContext();
+    }
+    const originalSource = audioContext.createBufferSource();
+    originalSource.buffer = originalBuffer;
+    originalSource.connect(audioContext.destination);
+    originalSource.start(0);
+  });
+  
+  // Bouton Play dans la section MODIFIÉ
+  document.getElementById("playModifiedButton").addEventListener("click", () => {
+    if (!modifiedBuffer) {
+      console.warn("Aucun audio modifié chargé pour la lecture.");
+      return;
+    }
+    if (!audioContext) {
+      audioContext = new AudioContext();
+    }
+    const modifiedSource = audioContext.createBufferSource();
+    modifiedSource.buffer = modifiedBuffer;
+    modifiedSource.connect(audioContext.destination);
+    modifiedSource.start(0);
+  });
+  
+  // Contrôle global Play/Stop (si besoin)
+  document.getElementById("playButton").addEventListener("click", () => {
+    if (!modifiedBuffer) {
+      console.warn("Aucun audio modifié chargé pour la lecture globale.");
+      return;
+    }
+    if (!audioContext) {
+      audioContext = new AudioContext();
+    }
+    if (sourceNode) {
+      sourceNode.stop();
+    }
+    sourceNode = audioContext.createBufferSource();
+    sourceNode.buffer = modifiedBuffer;
+    sourceNode.connect(audioContext.destination);
+    sourceNode.start(0);
+  });
+  
+  document.getElementById("stopButton").addEventListener("click", () => {
+    if (sourceNode) {
+      sourceNode.stop();
+      sourceNode = null;
+    }
+  });
+</script>
+</body>
+</html>
